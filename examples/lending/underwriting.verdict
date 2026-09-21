@@ -1,0 +1,60 @@
+--- The lending decision.
+--- Written in Verdict, which will not compile a decision that cannot explain
+--- itself or that can reach a prohibited factor.
+module lending.underwriting
+
+record Assessment {
+  applicant: ApplicantV2
+  request: LoanRequest
+  bureau_score: Int
+  invariant bureau_score >= 0
+}
+
+decision assess(input: Assessment) -> Ruling
+  intent "Decide a personal loan on credit quality, affordability and tenure."
+  cost steps 200000
+
+  --- Postcode and legal name must be unreachable from this decision, not
+  --- merely unused by convention. The compiler enforces that, including
+  --- through factors.
+  prohibited input.applicant.legal_name, input.applicant.email
+
+  factor score: Int = Int.max(input.bureau_score, input.applicant.credit_score)
+    because "Credit history is the strongest single predictor of repayment."
+    weight 45
+
+  factor burden: Int = affordability_ratio(input.request.amount_requested, input.applicant.annual_income)
+    because "Borrowing as a share of income bounds what the applicant can afford."
+    weight 35
+
+  factor tenure: Int = input.applicant.months_employed
+    because "Length of employment is a proxy for income stability."
+    weight 20
+
+  rule below_credit_floor
+    when score < 560
+    outcome Decline
+    because "The credit score is below the published floor of 560."
+
+  rule unaffordable
+    when burden > 45
+    outcome Decline
+    because "The requested amount exceeds 45 percent of declared annual income."
+
+  rule term_too_long_for_thin_file
+    when score < 660 and input.request.term_months > 60
+    outcome Refer
+    because "A term beyond five years on a thin credit file needs manual review."
+
+  rule prime
+    when score >= 720 and burden <= 30 and tenure >= 12
+    outcome Approve
+    because "Strong credit, affordable borrowing and stable employment."
+
+  rule near_prime
+    when score >= 660 and burden <= 38 and tenure >= 6
+    outcome Approve
+    because "Adequate credit and affordability with six months of employment."
+
+  otherwise Refer
+    because "Does not meet the published criteria for an automatic decision."

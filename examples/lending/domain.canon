@@ -1,0 +1,103 @@
+--- Core lending types and the pure functions over them.
+--- Written in Canon, the language everything else lowers to.
+module lending
+
+enum Ruling {
+  | Approve
+  | Refer
+  | Decline
+}
+
+enum OriginationError {
+  | NotEligible
+  | BureauUnavailable
+  | OfferExpired
+  | LedgerRejected
+}
+
+record LoanRequest {
+  reference: Text
+  applicant_id: Text
+  amount_requested: Int
+  term_months: Int
+  classify applicant_id pseudonymous
+  invariant amount_requested >= 0
+  invariant term_months >= 0
+}
+
+record LoanOffer {
+  reference: Text
+  amount: Int
+  term_months: Int
+  annual_rate_basis_points: Int
+  invariant amount >= 0
+  invariant annual_rate_basis_points >= 0
+}
+
+effect ledger {
+  --- Stage an accounting entry. Reversible until it is committed.
+  append(reference: Text, amount: Int) -> Result<Text, OriginationError>
+  --- Make a staged entry permanent. This is the point of no return.
+  commit(reference: Text) -> Result<Text, OriginationError>
+  --- Reverse a staged entry that was never committed.
+  reverse(reference: Text) -> Unit
+  idempotent read(reference: Text) -> Option<Text>
+}
+
+effect notify {
+  email(to: Text, subject: Text, body: Text) -> Result<Text, OriginationError>
+}
+
+effect bureau {
+  --- Pull a credit file. Rate limited and billed per call.
+  idempotent pull(applicant_id: Text) -> Result<Int, OriginationError>
+}
+
+fn affordability_ratio(amount: Int, annual_income: Int) -> Int
+  intent "Borrowing as a whole-number percentage of annual income."
+  requires amount >= 0
+  requires annual_income >= 0
+  ensures result >= 0
+  law never_negative
+  law deterministic
+{
+  Option.unwrap_or(Int.div(amount * 100, Int.max(annual_income, 1)), 100)
+}
+
+fn monthly_instalment(amount: Int, term_months: Int) -> Int
+  intent "The undiscounted monthly instalment for a loan."
+  requires amount >= 0
+  requires term_months >= 0
+  ensures result >= 0
+  law never_negative
+{
+  Option.unwrap_or(Int.div(amount, Int.max(term_months, 1)), 0)
+}
+
+fn rate_for(ruling: Ruling, score: Int) -> Int
+  intent "The annual rate in basis points implied by a ruling and a score."
+  requires score >= 0
+  ensures result >= 0
+  law never_negative
+  cost steps 1000
+{
+  match ruling {
+    case Decline => 0
+    case Refer => 1800
+    case Approve => if score >= 760 then 590 else 940
+  }
+}
+
+fn build_offer(request: LoanRequest, ruling: Ruling, score: Int) -> LoanOffer
+  intent "Turn an approved request into a concrete offer."
+  requires score >= 0
+  ensures result.reference == request.reference
+  cost steps 2000
+{
+  LoanOffer {
+    reference: request.reference,
+    amount: request.amount_requested,
+    term_months: request.term_months,
+    annual_rate_basis_points: rate_for(ruling, score)
+  }
+}

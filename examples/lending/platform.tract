@@ -1,0 +1,59 @@
+--- Deployment for the lending service.
+--- Written in Tract: the endpoints are declared, and what must be provisioned
+--- is derived from the capability footprint of the code behind them.
+module lending.platform
+
+resource api: HttpService {
+  intent "The origination surface used by the broker portal."
+  expose lending.origination.originate at "/loans/originate" method "POST"
+  expose lending.data.income_band_report at "/reports/income-band" method "GET"
+  region "eu-west-1"
+  environment "production"
+  scale_to 24
+  quota rps 400
+  budget money 900
+}
+
+resource loan_ledger: Table {
+  intent "The accounting record. Retained for the statutory period."
+  schema LoanOffer
+  key reference
+  region "eu-west-1"
+  retention 2555 days
+  budget money 300
+}
+
+resource applicant_store: Table {
+  intent "Applicant records, holding personal data under retention."
+  schema ApplicantV2
+  key id
+  region "eu-west-1"
+  retention 2555 days
+  budget money 180
+}
+
+resource postbox: Mailer {
+  intent "Customer confirmations."
+  region "eu-west-1"
+  quota daily 250000
+  budget money 60
+}
+
+--- The bureau is a third party with its own vocabulary, so the resource
+--- states which effect it covers rather than Tract having to know about
+--- credit bureaux.
+resource credit_bureau: ExternalService {
+  intent "The credit reference agency. Billed per pull and rate limited."
+  provides bureau
+  region "eu-west-1"
+  retention 30 days
+  quota daily 20000
+  budget money 120
+}
+
+resource origination_engine: WorkflowEngine {
+  intent "Durable workflow state for in-flight originations."
+  region "eu-west-1"
+  quota depth 50000
+  depends on loan_ledger
+}

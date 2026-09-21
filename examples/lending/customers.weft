@@ -1,0 +1,56 @@
+--- Applicant storage: two schema versions and the migration between them.
+--- Written in Weft, which derives both directions of the migration and
+--- attaches the law that checks the round trip.
+module lending.data
+
+effect store {
+  write(key: Text, value: Text) -> Unit
+  read(key: Text) -> Option<Text>
+  scan(prefix: Text) -> List<Text>
+}
+
+schema Applicant v1 {
+  intent "An applicant as stored before employment history was collected."
+  field id: Text key
+  field email: Text classify personal unique
+  field legal_name: Text classify personal
+  field annual_income: Int
+  field credit_score: Int
+  retention 2555 days
+  index email
+  invariant annual_income >= 0
+  invariant credit_score >= 0
+}
+
+schema Applicant v2 {
+  intent "An applicant, with employment tenure added for affordability checks."
+  field id: Text key
+  field email: Text classify personal unique
+  field legal_name: Text classify personal
+  field annual_income: Int
+  field credit_score: Int
+  field months_employed: Int = 0
+  retention 2555 days
+  index email
+  invariant annual_income >= 0
+  invariant credit_score >= 0
+  invariant months_employed >= 0
+}
+
+--- Existing applicants have no recorded tenure, so they migrate to zero and
+--- are handled as unknown rather than as newly employed.
+migrate Applicant v1 -> v2 {
+  intent "Add employment tenure, defaulting existing records to unknown."
+  forward months_employed = 0
+}
+
+pipeline income_band_report(rows: List<ApplicantV2>) -> Int
+  intent "Count applicants earning above the affordability threshold."
+  uses store.write
+{
+  source ids: List<Text> = List.map(rows, fn(a: ApplicantV2) => a.id)
+  transform above = List.filter(rows, fn(a: ApplicantV2) => a.annual_income >= 40000)
+  transform total: Int = List.length(above)
+  sink store.write("reports/income_band", Int.to_text(total))
+  total
+}

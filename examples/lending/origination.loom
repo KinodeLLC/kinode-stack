@@ -1,0 +1,40 @@
+--- Loan origination: the long-running process that turns a request into a
+--- booked loan. Written in Loom, so each step's compensation sits next to it
+--- and the whole thing resumes from the effect journal after a crash.
+module lending.origination
+
+workflow originate(request: LoanRequest, applicant: ApplicantV2) -> Result<LoanOffer, OriginationError>
+  intent "Pull a credit file, decide, book the loan, and confirm it."
+  uses bureau.pull, ledger.append, ledger.commit, ledger.reverse, notify.email
+  deadline 900000
+  idempotent by request
+{
+  --- Bureau pulls are billed and rate limited, so they are retried but
+  --- bounded, and the count is visible here rather than in a config file.
+  step credit_file = bureau.pull(request.applicant_id)
+    retry 2
+
+  let assessment = Assessment {
+    applicant: applicant,
+    request: request,
+    bureau_score: credit_file
+  }
+
+  let ruling = assess_outcome(assessment)
+  let offer = build_offer(request, ruling, credit_file)
+
+  --- Booking is two-phase. Staging is reversible, so it declares how to undo
+  --- itself; if the commit below fails, this is what runs.
+  step booking: ledger.append(request.reference, offer.amount)
+    compensate ledger.reverse(request.reference)
+
+  --- The point of no return. Nothing after this can unwind the loan.
+  step settlement: ledger.commit(request.reference)
+
+  --- A failed confirmation must not unwind a settled loan. The customer is
+  --- told another way; the money has already moved.
+  step confirmation: notify.email(applicant.email, "Your loan offer", request.reference)
+    on_failure continue
+
+  Ok(offer)
+}

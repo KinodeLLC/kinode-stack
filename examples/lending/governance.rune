@@ -1,0 +1,81 @@
+--- What an autonomous agent may change in the lending service.
+--- Written in Rune, and deliberately kept out of the codebase it governs:
+--- this file has its own review path.
+module lending.governance
+
+policy underwriting_maintenance {
+  intent "A maintenance agent may tune the decision, but not touch money or customers."
+  actor "agent:underwriting"
+
+  --- Reading is free; the bureau is billed, so it is capped.
+  grant bureau.pull limit 500 calls
+  grant model.infer, model.judge
+  grant log.info, log.warn
+  --- Workflow bookkeeping. Not a privilege, but still a journaled effect, so
+  --- it has to be granted for any workflow to run under this policy.
+  grant workflow.checkpoint, workflow.compensated
+
+  --- Nothing that moves money or contacts a customer, at any privilege level.
+  deny ledger.append, ledger.reverse
+  deny notify.email
+
+  --- The decision and the pure functions under it. Not origination.
+  scope lending.underwriting.*, lending.affordability_ratio, lending.rate_for
+
+  limit blast_radius 12
+  limit classification pseudonymous
+  limit tokens 200000
+  limit money 25
+
+  require_approval when new_capabilities, contracts_change, signature_change
+
+  promote when verified and not diverged
+
+  audit all
+}
+
+policy data_maintenance {
+  intent "A schema agent may add fields and write migrations, nothing else."
+  actor "agent:data"
+
+  grant store.read, store.scan
+  grant store.write limit 100 calls
+
+  deny bureau.pull
+  deny ledger.append, ledger.reverse
+  deny notify.email
+
+  scope lending.data.*
+
+  limit blast_radius 8
+  limit classification personal
+  limit tokens 100000
+
+  require_approval when new_capabilities, classification_increase, signature_change
+
+  promote when verified and not diverged
+
+  audit all
+}
+
+policy release_engineer {
+  intent "A human release engineer, with wider scope and a human approval gate."
+  actor "human:release"
+
+  grant ledger.read
+  grant store.read, store.scan
+  grant log.info, log.warn
+
+  deny ledger.append, ledger.reverse
+
+  scope lending.*
+
+  limit blast_radius 40
+  limit classification personal
+
+  require_approval when always
+
+  promote when verified
+
+  audit all
+}

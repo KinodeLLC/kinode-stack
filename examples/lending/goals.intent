@@ -1,0 +1,84 @@
+--- What the lending service is for, and how to tell whether it still is.
+--- Written in Intent: every scenario below is an executable test, and every
+--- goal is pinned to the hash of the code that satisfies it.
+module lending.goals
+
+goal "An application below the published credit floor is always declined"
+  owner "credit-risk"
+  rationale "The floor is published to applicants and to the regulator, so the system must not approve below it under any combination of other factors."
+
+  scenario "a thin file is declined even with a strong income"
+    given applicant = ApplicantV2 { id: "a1", email: "a@example.com", legal_name: "A", annual_income: 250000, credit_score: 400, months_employed: 120 }
+    given request = LoanRequest { reference: "r1", applicant_id: "a1", amount_requested: 5000, term_months: 24 }
+    given input = Assessment { applicant: applicant, request: request, bureau_score: 400 }
+    expect assess_outcome(input) is Decline
+
+  scenario "the decline states the floor"
+    given applicant = ApplicantV2 { id: "a1", email: "a@example.com", legal_name: "A", annual_income: 250000, credit_score: 400, months_employed: 120 }
+    given request = LoanRequest { reference: "r1", applicant_id: "a1", amount_requested: 5000, term_months: 24 }
+    given input = Assessment { applicant: applicant, request: request, bureau_score: 400 }
+    expect List.length(assess(input).reasons) == 1
+
+  traces lending.underwriting.assess
+
+goal "Borrowing beyond 45 percent of income is declined"
+  owner "credit-risk"
+  rationale "Affordability is a regulatory obligation, not a risk preference."
+
+  scenario "an overextended request is declined despite excellent credit"
+    given applicant = ApplicantV2 { id: "a2", email: "b@example.com", legal_name: "B", annual_income: 30000, credit_score: 820, months_employed: 60 }
+    given request = LoanRequest { reference: "r2", applicant_id: "a2", amount_requested: 20000, term_months: 36 }
+    given input = Assessment { applicant: applicant, request: request, bureau_score: 820 }
+    expect assess_outcome(input) is Decline
+
+  traces lending.underwriting.assess, lending.affordability_ratio
+
+goal "A strong application is approved automatically"
+  owner "credit-risk"
+  rationale "Automatic approval is the reason the service exists; a system that refers everything has no value over the manual process."
+
+  scenario "prime credit with affordable borrowing is approved"
+    given applicant = ApplicantV2 { id: "a3", email: "c@example.com", legal_name: "C", annual_income: 90000, credit_score: 780, months_employed: 48 }
+    given request = LoanRequest { reference: "r3", applicant_id: "a3", amount_requested: 20000, term_months: 48 }
+    given input = Assessment { applicant: applicant, request: request, bureau_score: 780 }
+    expect assess_outcome(input) is Approve
+
+  scenario "an approval carries a rate"
+    given applicant = ApplicantV2 { id: "a3", email: "c@example.com", legal_name: "C", annual_income: 90000, credit_score: 780, months_employed: 48 }
+    given request = LoanRequest { reference: "r3", applicant_id: "a3", amount_requested: 20000, term_months: 48 }
+    expect build_offer(request, Approve, 780).annual_rate_basis_points > 0
+
+  nonfunctional "a decision is cheap enough to make synchronously"
+    metric steps <= 200000
+
+  traces lending.underwriting.assess, lending.build_offer, lending.rate_for
+
+goal "Every decision can be explained to the applicant who received it"
+  owner "compliance"
+  rationale "An adverse decision must come with a reason the applicant can be given and the regulator can audit."
+
+  scenario "a referral carries a reason"
+    given applicant = ApplicantV2 { id: "a4", email: "d@example.com", legal_name: "D", annual_income: 60000, credit_score: 640, months_employed: 3 }
+    given request = LoanRequest { reference: "r4", applicant_id: "a4", amount_requested: 12000, term_months: 36 }
+    given input = Assessment { applicant: applicant, request: request, bureau_score: 640 }
+    expect List.length(assess(input).reasons) > 0
+
+  scenario "every factor considered is reported with its weight"
+    given applicant = ApplicantV2 { id: "a4", email: "d@example.com", legal_name: "D", annual_income: 60000, credit_score: 640, months_employed: 3 }
+    given request = LoanRequest { reference: "r4", applicant_id: "a4", amount_requested: 12000, term_months: 36 }
+    given input = Assessment { applicant: applicant, request: request, bureau_score: 640 }
+    expect List.length(assess(input).factors) == 3
+
+  traces lending.underwriting.assess
+
+goal "Affordability is computed the same way everywhere"
+  owner "credit-risk"
+  rationale "Two different affordability calculations is how a service starts approving loans it declined yesterday."
+
+  scenario "the ratio is a percentage of income"
+    expect affordability_ratio(20000, 100000) == 20
+
+  scenario "a zero income does not fault"
+    expect affordability_ratio(5000, 0) >= 0
+
+  traces lending.affordability_ratio
