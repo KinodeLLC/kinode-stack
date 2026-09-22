@@ -1,17 +1,17 @@
-# The languages
+# Languages
 
-Seven surface languages over one core IR. Each is shaped by one question: what
-does this domain need to make machine-checkable that a general-purpose language
-leaves to convention?
+seven surface languages over one core ir. each one comes from the same
+question, what does this domain need to make checkable by a machine that a
+general purpose language leaves up to convention
 
-All examples below are taken from
-[`examples/lending`](../examples/lending), which checks and runs.
+every example here is out of [`examples/lending`](../examples/lending), which
+checks and runs.
 
 ---
 
-## Canon
+## canon
 
-The core. Everything else lowers to it.
+the core, everything else lowers to it
 
 ```canon
 module lending
@@ -46,49 +46,49 @@ fn affordability_ratio(amount: Int, annual_income: Int) -> Int
 }
 ```
 
-### Function clauses
+### clauses
 
-| Clause | Meaning |
+| clause | what it means |
 | --- | --- |
-| `intent "..."` | What this is for. Part of the hash, and what Intent matches against. |
-| `uses a.b, c.d` | Every effect operation this may perform. Not inferred. |
-| `requires <expr>` | Precondition, checked on entry and used to filter generated inputs. |
-| `ensures <expr>` | Postcondition, with `result` and `old(...)` in scope. |
-| `law <name>` | A named property the verifier checks against generated inputs. |
-| `cost steps N, io N, tokens N, millis N, money N` | Resource ceiling, enforced at runtime and compared against observed usage. |
-| `decreases <expr>` | Required for recursion. The measure must strictly decrease. |
+| `intent "..."` | what this is for. part of the hash, and what intent matches against |
+| `uses a.b, c.d` | every effect operation this can perform. not inferred |
+| `requires <expr>` | precondition, checked on entry and used to throw out generated inputs |
+| `ensures <expr>` | postcondition, with `result` and `old(...)` in scope |
+| `law <name>` | a named property the verifier checks against generated inputs |
+| `cost steps N, io N, tokens N, millis N, money N` | ceiling, enforced at runtime and compared against what actually got used |
+| `decreases <expr>` | needed for recursion, the measure has to go down |
 
-### Laws
+### laws
 
 `deterministic`, `pure`, `total`, `idempotent_by(key)`, `commutative`,
-`associative`, `monotonic_in(param)`, `conserves(field)`,
-`bounded_output(n)`, `never_negative`, `order_independent`, `injective`,
-`invertible_by(fn)`, `grounded`, `explains`.
+`associative`, `monotonic_in(param)`, `conserves(field)`, `bounded_output(n)`,
+`never_negative`, `order_independent`, `injective`, `invertible_by(fn)`,
+`grounded`, `explains`
 
-### Types
+### types
 
-`Int` (arbitrary precision), `Dec` (exact decimal), `Text`, `Bool`, `Unit`,
-`Bytes`, `Time`, `List<T>`, `Set<T>`, `Map<K,V>`, `Option<T>`,
-`Result<T,E>`, records, enums, `Fn(A) -> B uses e.op`.
+`Int` arbitrary precision, `Dec` exact decimal, `Text`, `Bool`, `Unit`,
+`Bytes`, `Time`, `List<T>`, `Set<T>`, `Map<K,V>`, `Option<T>`, `Result<T,E>`,
+records, enums, `Fn(A) -> B uses e.op`
 
-No subtyping, no implicit conversion, no truthiness. Every function, lambda
-parameter and record field is annotated, so the checker only instantiates
-polymorphism rather than inferring it — which means a type error always points
-at one site with a concrete expected and actual type.
+no subtyping, no implicit conversion, no truthiness. every function and lambda
+parameter and record field is annotated, so the checker only ever instantiates
+polymorphism instead of inferring it, and a type error lands on one spot with a
+concrete expected and actual instead of unwinding through three layers
 
-### Things Canon will not let you write
+### rejected
 
 ```canon
-a / b                  -- no division operator; use Int.div, which returns Option
-if count then ... else -- no truthiness; compare explicitly
-match c { case Red => 1 }   -- non-exhaustive
+a / b                         -- no division operator, use Int.div
+if count then ... else        -- no truthiness, compare it
+match c { case Red => 1 }     -- not exhaustive
 fn f(n: Int) -> Int { f(n) }  -- recursion with no decreases measure
-a + b                  -- where a is Int and b is Dec
+a + b                         -- a is Int and b is Dec
 ```
 
-Each produces a diagnostic with a repair attached.
+each of those comes back with a fix attached
 
-### The `ask` expression
+### ask
 
 ```canon
 fn triage(body: Text) -> Severity
@@ -106,22 +106,21 @@ fn triage(body: Text) -> Severity
 }
 ```
 
-Settings: `system`, `input [label:]`, `grounded_in`, `examples`,
-`temperature`, `retries N on ...`, `max_tokens`, `judge`.
+settings are `system`, `input [label:]`, `grounded_in`, `examples`,
+`temperature`, `retries N on ...`, `max_tokens`, `judge`
 
-Retry reasons: `contract_violation`, `type_error`, `refusal`, `timeout`,
-`grounding_failure`, `judge_rejected`.
+retry reasons are `contract_violation`, `type_error`, `refusal`, `timeout`,
+`grounding_failure`, `judge_rejected`
 
-Models are named by alias (`claude.opus`, `claude.sonnet`, `claude.haiku`,
-`claude.fable`, `stub.deterministic`). Model capabilities are checked at
-compile time.
+models go by alias, `claude.opus`, `claude.sonnet`, `claude.haiku`,
+`claude.fable`, `stub.deterministic`, and their capabilities get checked when
+you compile
 
 ---
 
-## Intent
+## intent
 
-Specifications whose scenarios are executable and whose traces are pinned to
-content hashes.
+specs whose scenarios run, and goals pinned to the hash of the code under them
 
 ```intent
 goal "A captured charge can be refunded once, up to its captured amount"
@@ -142,12 +141,12 @@ goal "A captured charge can be refunded once, up to its captured amount"
   traces billing.refund at #mzod4ptezmedyw2dfsbywrumek
 ```
 
-**Scenarios lower to Canon tests.** A specification that cannot be run is
-rejected — a goal with no scenarios does not compile.
+scenarios lower to canon tests, so a spec you cannot run is not a spec and a
+goal with no scenarios will not compile
 
-**Traces are pinned.** `accept` records the current hash of every traced
-definition. When that definition changes, the goal reports as stale — including
-when every scenario still passes, which is the case a test suite cannot catch:
+`accept` writes down the current hash of everything a goal traces to. change one
+of those and the goal comes back stale, including when every scenario still
+passes, which is the case tests cannot catch
 
 ```
 FAIL A strong application is approved automatically
@@ -155,17 +154,15 @@ FAIL A strong application is approved automatically
      changed since acceptance: lending.underwriting.assess (#7fa2 -> #b104)
 ```
 
-**Untraced code is reported.** Code nobody asked for is as much a finding as a
-goal nobody implemented.
-
-**Non-functional requirements are checked against declared cost**, so
-"must complete within 250ms" is compared to something the compiler knows.
+definitions no goal traces to get listed. non functional requirements get
+checked against declared cost so `millis <= 250` is compared against something
+the compiler already knows
 
 ---
 
-## Verdict
+## verdict
 
-Decisions that cannot compile unless they explain themselves.
+decisions that will not compile unless they can explain themselves
 
 ```verdict
 decision assess(input: Assessment) -> Ruling
@@ -197,34 +194,31 @@ decision assess(input: Assessment) -> Ruling
     because "Does not meet the published criteria for an automatic decision."
 ```
 
-Four structural guarantees:
+every rule states a reason and leaving `because` off is a parse error. every
+decision has a default so there is no input it cannot answer and no outcome
+with nothing recorded about why. every factor says why it is used, since one
+that cannot go in the explanation is no use in a regulated decision
 
-1. **Every rule states a reason.** Omitting `because` is a parse error.
-2. **Every decision has a default.** There is no input the decision cannot
-   answer and no outcome without a recorded reason.
-3. **Every factor states why it is used.** An unexplainable factor is not
-   usable in a regulated decision.
-4. **Prohibited factors are unreachable**, not merely unused. A field named in
-   `prohibited` is rejected whether a rule reads it directly or reaches it
-   through a factor, and the diagnostic names the route:
+prohibited fields are unreachable rather than unused, and it does not matter
+whether a rule reads one directly or gets at it through a factor, the error
+tells you which route
 
 ```
 error[CANON-E0903]: rule 'below_credit_floor' depends on a prohibited field
   fields: ['input.applicant.legal_name']
   via_factors: ['tenure']
-  note: A prohibited field reached through a factor is still a prohibited field.
 ```
 
-Lowers to a result record carrying the outcome, the reasons and every factor
-with its value, weight and basis, plus contracts asserting the result always
-carries at least one reason and reports every factor considered.
+it lowers to a result record holding the outcome and the reasons and every
+factor with its value and weight and basis, plus contracts saying there is
+always at least one reason and every factor considered gets reported
 
 ---
 
-## Loom
+## loom
 
-Durable workflows. Compensation sits next to the step it undoes; resumption is
-journal replay.
+durable workflows, compensation next to the step it undoes, resumption off the
+journal
 
 ```loom
 workflow originate(request: LoanRequest, applicant: ApplicantV2)
@@ -252,33 +246,32 @@ workflow originate(request: LoanRequest, applicant: ApplicantV2)
 }
 ```
 
-**Step forms**: `step name = expr` names and binds; `step name: expr` names
-without binding; `step expr` derives a name.
+`step name = expr` names and binds, `step name: expr` names without binding,
+`step expr` derives a name
 
-**Compensation is emitted explicitly.** The unwinding for every failure point
-is written into the generated Canon rather than driven by a runtime stack, so
-it is visible before it runs and provably in reverse order.
+the undoing gets written into the generated canon rather than driven by a
+runtime stack, so you can read the failure path for every step before anything
+runs and it goes in reverse
 
-**Retries are unrolled, not looped.** This keeps every workflow total and keeps
-the number of times an external system can be called a fact visible in the
-source. Bounded at 8.
+retries are unrolled instead of looped, which keeps workflows total and keeps
+the number of external calls readable in the source, capped at 8
 
-**Resumption is the Ledger's replay.** Each step checkpoints before it runs, so
-a crashed workflow continues from the first step that never finished:
+each step checkpoints before it runs so a crashed workflow picks up at the
+first step that never finished
 
 ```
 ok  an interrupted origination resumes without re-billing the bureau:
     replayed 8 journal entries, no external call repeated, identical offer
 ```
 
-`on_failure continue` marks a step that must not unwind what came before — a
-failed confirmation should not reverse a settled loan.
+`on_failure continue` marks a step that must not unwind what came before,
+because a failed confirmation should not reverse a settled loan
 
 ---
 
-## Weft
+## weft
 
-Schemas, derived migrations, and data lineage.
+schemas, migrations, lineage
 
 ```weft
 schema Applicant v1 {
@@ -308,30 +301,30 @@ migrate Applicant v1 -> v2 {
 }
 ```
 
-**Every differing field must be accounted for.** A field added without a value
-or default, or removed without a way back, is a compile error naming the field.
+every field that differs has to be accounted for, and a field added with no
+value or default or removed with no way back is a compile error naming it
 
-**Irreversible migrations must say so.** Otherwise both directions are
-generated with an `invertible_by` law attached, so the round trip is checked by
-the verifier against generated records rather than asserted:
+a migration you cannot reverse has to say `lossy`, otherwise both directions
+get generated with an `invertible_by` law on them so the verifier runs the
+round trip against generated records instead of you asserting it
 
 ```
 ok  the round trip is checked by the verifier, not asserted:
     invertible_by verified over 40 generated records
 ```
 
-**Classifications cannot weaken.** A field `personal` in v1 cannot be `public`
-in v2, so a rename cannot launder protected data.
+classifications cannot weaken, `personal` in v1 cannot come out `public` in v2,
+so renaming does not launder protected data
 
-**Pipelines derive lineage.** A pipeline lowers to a function plus a lineage
-record — which fields flowed where, and the highest classification that passed
-through — generated from the stages rather than maintained alongside them.
+a pipeline lowers to a function plus a lineage record, which fields went where
+and the highest classification that passed through, generated off the stages so
+it cannot drift
 
 ---
 
-## Tract
+## tract
 
-Infrastructure derived from the program's capability footprint.
+infrastructure worked out from what the code can reach
 
 ```tract
 resource api: HttpService {
@@ -354,34 +347,31 @@ resource credit_bureau: ExternalService {
 }
 ```
 
-You declare what to **expose**; what must be **provisioned** is computed.
-Exposing a function whose call graph needs storage, with no storage declared,
-is a compile error naming the capability, the function and the resource kinds
-that would provide it:
+you declare what to expose and what has to be provisioned gets computed.
+exposing a function whose call graph needs storage with no storage declared is a
+compile error naming the capability, the function and the resource kinds that
+would cover it
 
 ```
 error[CANON-E0403]: lending.origination.originate needs 'ledger.append' but no
                     declared resource provides it
   resource_kinds_that_provide_it: ['Table']
-  note: The capability comes from the function's call graph, not from a
-        declaration, so this is what the endpoint will actually try to do.
 ```
 
-An endpoint's permissions and its actual reach are the same number by
-construction. Resources nothing reaches are reported, and a public endpoint
-touching protected data is flagged.
+so an endpoint's permissions and what it can actually reach are the same number.
+resources nothing reaches get reported, and a public endpoint touching protected
+data gets flagged
 
-Kinds: `HttpService`, `Table`, `Queue`, `Cache`, `ObjectStore`, `Mailer`,
-`ModelAccess`, `Secret`, `Schedule`, `WorkflowEngine`, `ExternalService`. A
-resource may also declare `provides <effect>` for vocabularies Tract does not
-know.
+kinds are `HttpService`, `Table`, `Queue`, `Cache`, `ObjectStore`, `Mailer`,
+`ModelAccess`, `Secret`, `Schedule`, `WorkflowEngine`, `ExternalService`, and
+any resource can add `provides <effect>` for names tract does not know
 
 ---
 
-## Rune
+## rune
 
-Governance policy. Kept a separate language from the code it governs, so a
-policy change is its own artifact with its own review path.
+policy, kept out of the code it governs so a policy change is its own thing
+with its own review
 
 ```rune
 policy underwriting_maintenance {
@@ -409,32 +399,32 @@ policy underwriting_maintenance {
 }
 ```
 
-A policy compiles to the two objects that already make the decisions:
-**capability grants** for the broker, and an **authorisation** for the
-promotion gate. It is enforced by construction rather than consulted by
-convention.
+it compiles into the two objects already making the decisions, capability
+grants for the broker and an authorisation for the gate, so it is enforced by
+construction rather than consulted by convention
 
 ```
 ok  a policy that denies money stops the workflow at the ledger:
     bureau.pull permitted, ledger.append refused at the boundary
 ```
 
-Denials beat grants, and a policy that both grants and denies an operation is a
-compile error rather than a precedence puzzle. Wildcard grants, missing
-promotion conditions and missing blast-radius limits are reported.
+denials beat grants and granting plus denying the same thing is a compile
+error. wildcard grants, missing promotion conditions and missing blast radius
+limits all get reported
 
-Approval triggers: `new_capabilities`, `contracts_change`, `signature_change`,
-`behaviour_change`, `classification_increase`, `intent_change`, `always`.
+approval triggers are `new_capabilities`, `contracts_change`,
+`signature_change`, `behaviour_change`, `classification_increase`,
+`intent_change`, `always`
 
-Promotion conditions: `verified`, `not_diverged`, `tests_pass`, `in_scope`,
-`within_blast_radius`.
+promotion conditions are `verified`, `not_diverged`, `tests_pass`, `in_scope`,
+`within_blast_radius`
 
 ---
 
-## How they compose
+## composition
 
-Because everything lowers to one IR, definitions from different languages sit
-in one graph:
+since everything lowers to one ir, definitions out of different languages sit
+in one graph
 
 ```
 $ canon atlas blast affordability_ratio examples/lending
@@ -445,7 +435,7 @@ lending.affordability_ratio #ecpsvedi
   data: personal, pseudonymous
 ```
 
-That one Canon function is called by a Verdict factor, which is called by a
-Loom workflow, which is exercised by Intent scenarios, deployed by a Tract
-resource, and governed by a Rune policy. Editing it is one change with one
-blast radius, one verification pass and one promotion decision.
+that one canon function gets called by a verdict factor, which gets called by a
+loom workflow, which gets exercised by intent scenarios, deployed by a tract
+resource and governed by a rune policy. editing it is one change with one blast
+radius, one verification pass and one promotion decision

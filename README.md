@@ -1,20 +1,18 @@
 # Kinode
 
-A family of programming languages and a runtime for code written by agents
-rather than by people.
+a family of programming languages and a runtime for code that agents write
+instead of people.
 
-The design target is not "a language a model finds easy to write" — models
-already write Python and TypeScript fluently, and syntax was never the
-bottleneck. The target is:
+the usual framing for this is a language a model finds easy to write, but
+models already write python and typescript fine and syntax was never what was
+stopping anybody. what is actually missing is a way to establish that a change
+is correct, that it cannot reach further than it was allowed to, and that it
+still does what somebody asked for, without a person sitting down and reading
+the implementation. everything here comes out of that.
 
-> a language and runtime where correctness, blast radius and intent-conformance
-> can be established **without a human reading the implementation**.
+## status
 
-Everything here follows from that.
-
-## Status
-
-Working software, version 0.1.0. Fourteen test suites, all passing:
+working software, 0.1.0. fourteen suites, all passing
 
 ```
 $ python kinode-stack/tests/run_all.py
@@ -36,33 +34,31 @@ $ python kinode-stack/tests/run_all.py
 14/14 suites passed in 1.8s
 ```
 
-No dependencies beyond Python 3.11+. The Anthropic SDK is optional and only
-needed for live model calls.
+python 3.11+ and nothing else. the anthropic sdk is optional and only needed if
+you want live model calls.
 
-## The languages
+## languages
 
-Seven surface languages over one shared core. Each domain gets syntax tuned to
-how that domain actually thinks; all of them lower to the same intermediate
-representation, so there is one type system, one verifier, one runtime, one
-audit trail and one blast-radius analysis across all of them.
+seven of them over one shared core. each one gets syntax that fits how its
+domain actually works, and they all lower to the same ir, so there is one type
+system, one verifier, one runtime, one audit trail and one blast radius
+analysis covering all of them instead of seven of each
 
-| Language | Extension | Purpose |
+| language | file | what it is for |
 | --- | --- | --- |
-| [Intent](../intent) | `.intent` | Specifications whose scenarios are executable and whose traces are pinned to content hashes |
-| [Canon](../canon) | `.canon` | The core: contracts, capability-typed effects, content-addressed definitions |
-| [Loom](../loom) | `.loom` | Durable workflows with compensation and journal-based resumption |
-| [Verdict](../verdict) | `.verdict` | Regulated decisions that cannot compile unless they explain themselves |
-| [Weft](../weft) | `.weft` | Schemas, derived migrations with round-trip proofs, data lineage |
-| [Tract](../tract) | `.tract` | Infrastructure derived from the program's capability footprint |
-| [Rune](../rune) | `.rune` | Governance policy, compiled to capability grants and promotion authorisations |
+| [intent](../intent) | `.intent` | specs whose scenarios run and whose traces are pinned to hashes |
+| [canon](../canon) | `.canon` | the core. contracts, effects as capabilities, content addressing |
+| [loom](../loom) | `.loom` | durable workflows, compensation, resumption off the journal |
+| [verdict](../verdict) | `.verdict` | regulated decisions that will not compile unless they explain themselves |
+| [weft](../weft) | `.weft` | schemas, migrations with the round trip proved, data lineage |
+| [tract](../tract) | `.tract` | infrastructure worked out from what the code can reach |
+| [rune](../rune) | `.rune` | policy, compiled into grants and promotion authorisations |
 
-## What the design actually buys
+## effects
 
-### Effects are capabilities, and they do not propagate silently
-
-A function declares every effect it performs. Calling a function that performs
-an effect requires the caller to declare it too. There is no inference, because
-an inferred footprint widens silently when a body changes.
+a function declares every effect it performs, and anything calling it declares
+them too. nothing is inferred, because an inferred list gets wider every time
+somebody edits a body and you do not find out until production
 
 ```canon
 fn persist(o: Order) -> Unit
@@ -73,8 +69,7 @@ fn persist(o: Order) -> Unit
 }
 ```
 
-Miss the declaration and you get a diagnostic with a repair attached, not a
-runtime surprise:
+miss the declaration and you get told, with the fix attached
 
 ```
 error[CANON-E0401]: effect 'store.write' is performed but not declared
@@ -82,8 +77,8 @@ error[CANON-E0401]: effect 'store.write' is performed but not declared
   fix: declare the effect on 'persist' `uses store.write`
 ```
 
-The consequence is that the capability footprint of any call graph is a
-computed fact:
+so what a call graph can reach is something you compute rather than something
+you write down and hope stays true
 
 ```
 $ canon atlas caps originate examples/lending
@@ -93,20 +88,20 @@ lending.origination.originate
   transitive: (the same set)
 ```
 
-### Definitions are content-addressed
+## hashing
 
-Every definition is identified by the hash of its normalised AST. Local
-variable names are erased by binding depth and independent contract clauses are
-sorted, so:
+every definition is identified by the hash of its normalised ast. local
+variables get encoded by binding depth rather than by name and independent
+contract clauses get sorted, so renaming a local does not move the hash,
+neither does reordering your `requires` and `ensures` and `uses`, and neither
+does reformatting. a rename is a zero risk edit, nothing downstream needs
+rechecking
 
-- renaming a local **does not** change the hash — a rename is a zero-risk edit
-- reordering `requires` / `ensures` / `uses` does not change the hash
-- reformatting does not change the hash
-- editing a dependency changes the dependent's *deep* hash but not its *local*
-  hash, which is how "what actually changed" is distinguished from
-  "what moved because something under it moved"
+editing something a function depends on moves its deep hash but leaves its
+local hash alone, which is how you tell somebody editing a function apart from
+somebody editing what it calls
 
-### Verification comes from contracts, not from reading code
+## verification
 
 ```canon
 fn apply_discount(total: Int, percent: Int) -> Int
@@ -117,9 +112,9 @@ fn apply_discount(total: Int, percent: Int) -> Int
   law never_negative
 ```
 
-The verifier generates inputs from the parameter types, discards those failing
-the preconditions, checks the postconditions and laws, and shrinks any failure
-to a minimal case:
+the verifier generates inputs off the parameter types, throws away the ones
+that break the preconditions, runs the rest, checks the postconditions and the
+laws, and shrinks anything that fails down to something you can read
 
 ```
 FAIL billing.overcharge  0/38 runs
@@ -127,26 +122,26 @@ FAIL billing.overcharge  0/38 runs
      input: (0, 1)
 ```
 
-Generation is seeded, so a failure reproduces exactly from the seed alone.
+generation is seeded so a failure comes back the same way next time, on another
+machine, months later, off the seed
 
-### Nothing is partial
+## totality
 
-There is no `/` operator, because division is the one partial arithmetic
-operation:
+there is no division operator because dividing by zero is the only arithmetic
+that can fail
 
 ```
 error[CANON-E0301]: there is no `/` operator in Canon
   use_instead: Int.div
   try: use Int.div, which returns Option and cannot fault `Int.div(a, b)`
-  note: Making it return Option keeps every expression total, so no generated
-        program can fault on a zero divisor.
 ```
 
-Recursion requires a `decreases` measure the runtime checks. Every match must
-be exhaustive. Every function runs under a step, io, token and spend budget.
-The result is that unreviewed agent-authored code can be executed safely.
+recursion needs a decreases measure that the runtime checks, matches have to
+cover every case, and everything runs under a budget for steps, io, tokens and
+money. that is what makes it safe to execute agent written code nobody has read
+yet, which the verifier and the shadow runner both depend on
 
-### The model is a language primitive
+## models
 
 ```canon
 fn assess(t: Ticket) -> Assessment
@@ -164,40 +159,37 @@ fn assess(t: Ticket) -> Assessment
 }
 ```
 
-`ask` is an expression, not a library call, which buys four things:
+`ask` is an expression rather than a library call, which gets you four things
 
-1. **Typed output.** A JSON Schema is derived from `Assessment` and constrains
-   the response. The result is a typed value, not a string to parse.
-2. **Contract-checked.** The enclosing `ensures` clauses are enforced on the
-   model's output. A violation is retried with the failure fed back as repair
-   context, then reported as a structured fault.
-3. **Capability-scoped and journaled.** `model.infer` must be granted. Calls
-   are budgeted in tokens and money and recorded, so a run replays exactly.
-4. **Model capabilities are checked at compile time.** Current Claude models
-   reject `temperature` with a 400 rather than ignoring it, so Canon rejects
-   the clause at check time:
+the json schema comes off `Assessment`, so what you get back is a typed value
+and not a string you have to parse
+
+the `ensures` clauses on the function are enforced on what the model returned,
+and if one fails you get a retry with the failure handed back as context, then
+a structured fault if it still will not comply
+
+`model.infer` has to be granted like any other effect, the call is budgeted in
+tokens and money, and it goes in the journal, so a run replays exactly
+
+model capabilities are checked when you compile. current claude models reject
+`temperature` with a 400 rather than ignoring it, so canon rejects the clause
+up front
 
 ```
 error[CANON-E0301]: claude.opus does not accept a temperature setting
-  note: This model rejects the parameter outright rather than ignoring it, so
-        the clause would fail every call at runtime.
 ```
 
-### Effects are journaled, so replay is exact
+## journal
 
-Every effect lands in a hash-chained journal. That single mechanism gives:
+every effect goes into a hash chained journal, and that one mechanism gets you
+exact replay of a recorded run with zero external calls, shadow deployment
+where a changed version runs against recorded production traffic and answers
+its effects out of the recording so it touches nothing while you collect what
+diverged, workflow resumption without loom needing a state store of its own,
+and tamper evidence, since altering a recorded argument breaks the chain at a
+specific sequence number
 
-- **Exact replay** — a recorded run re-executes with identical results and
-  zero external calls
-- **Shadow deployment** — a changed version runs against recorded production
-  traffic, answering effects from the recording, so it touches nothing while
-  its divergences are collected
-- **Workflow resumption** — Loom needs no state store; a crashed workflow
-  resumes by replaying its journal
-- **Tamper evidence** — altering a recorded argument breaks the chain at a
-  specific sequence number
-
-### The promotion gate decides, and says why
+## promotion
 
 ```
 decision: BLOCK
@@ -205,25 +197,25 @@ decision: BLOCK
           outside the authorised scope
 ```
 
-The gate compares a change against a stated authorisation: which definitions
-it may touch, which capabilities it may reach, how large a blast radius is
-acceptable, how sensitive the data may be, and whether behaviour may change at
-all. Capability deltas are computed **per definition**, so a function newly
-reaching a capability that another function already had is still reported as a
-privilege increase.
+the gate takes a change and an authorisation saying which definitions it can
+touch, which capabilities it can reach, how big a blast radius is acceptable,
+how sensitive the data can get and whether behaviour is allowed to change at
+all. capability deltas get computed per definition rather than across the whole
+set, so a function newly reaching something another function already had still
+comes back as a privilege increase
 
-## A worked example
+## example
 
 [`examples/lending`](examples/lending) is one system written across all seven
-languages — 7 files, 43 definitions:
+languages, 7 files and 43 definitions
 
 ```
 $ canon check examples/lending
 ok: 7 files, 43 definitions, 7 warnings
 ```
 
-They form one graph. Editing a single Canon helper reaches definitions in
-Verdict, Loom and Intent:
+they end up in one graph. editing a single canon helper reaches into verdict,
+loom and intent
 
 ```
 $ canon atlas blast affordability_ratio examples/lending
@@ -234,27 +226,30 @@ lending.affordability_ratio #ecpsvedi
   data: personal, pseudonymous
 ```
 
-The integration suite drives the whole path an agent-authored change would
-take. Some things it demonstrates:
+the integration suite runs the whole path a change would take. some of what it
+shows
 
-- **A policy that denies money stops a workflow at the ledger.** The
-  underwriting agent may pull a credit file but not book a loan; the workflow
-  runs until `ledger.append` and is refused at the boundary.
-- **A two-phase booking reverses correctly.** When settlement fails, the staged
-  ledger entry is reversed and the customer is *not* notified about a loan that
-  was rolled back.
-- **An interrupted origination resumes without re-billing the bureau.** Replay
-  produces an identical offer with zero external calls.
-- **A behaviour-preserving edit still reports its goals as stale.** Every
-  scenario still passes, but six goal traces went stale because the hash of the
-  definition they were accepted against changed. A test suite cannot catch this.
-- **The same edit is judged differently by two policies.** Adding a schema field
-  escalates under the data agent's policy and is blocked under the underwriting
-  agent's.
+a policy that denies money stops a workflow at the ledger. the underwriting
+agent can pull a credit file but cannot book a loan, so the workflow runs up to
+`ledger.append` and gets refused at the boundary
 
-## The agent interface
+a two phase booking reverses properly. settlement fails, the staged ledger
+entry gets reversed, and the customer does not get told about a loan that was
+rolled back
 
-Agents drive a JSON-RPC interface over stdin/stdout rather than files and grep:
+an interrupted origination resumes without re billing the bureau. replay comes
+back with the same offer and zero external calls
+
+a behaviour preserving edit still reports its goals stale. every scenario
+passes, but six goal traces went stale because the hash they were accepted
+against moved, which is the thing a test suite cannot catch
+
+the same edit gets judged differently by two policies. adding a schema field
+escalates under the data agent and gets blocked under the underwriting agent
+
+## agent interface
+
+agents drive json-rpc over stdin and stdout instead of files and grep
 
 ```json
 {"method": "atlas.view", "params": {"focus": "submit", "budget": 4000}}
@@ -263,61 +258,60 @@ Agents drive a JSON-RPC interface over stdin/stdout rather than files and grep:
 {"method": "edit.commit", "params": {"proposal": "prop-1", "write": true}}
 ```
 
-Three things this fixes:
+`atlas.view` hands back a projection sized to a token budget, the focus
+definition in full, what it calls as contracts, what calls it as signatures,
+and it tells you what it left out rather than quietly cutting it off. an agent
+that does not know its view is partial will reason like it is complete
 
-- `atlas.view` returns a projection sized to a token budget — the focus
-  definition in full, its callees as contracts, its callers as signatures — and
-  **reports what it omitted** rather than truncating silently.
-- Edits are transactional. A proposal is parsed, checked and diffed without
-  being applied. A failed edit leaves nothing behind.
-- There is no method that writes unchecked code.
+edits are transactional. a proposal gets parsed and checked and diffed without
+being applied, so a failed edit leaves nothing behind. there is no method that
+writes code nobody checked
 
-## Getting started
+## running it
 
 ```sh
-# From the workspace root
 export PYTHONPATH=canon/src:intent/src:loom/src:verdict/src:weft/src:tract/src:rune/src
 
 python -m canon.cli check  kinode-stack/examples/lending
 python -m canon.cli test   kinode-stack/examples/lending
 python -m canon.cli verify kinode-stack/examples/lending --runs 40
 python -m canon.cli atlas blast affordability_ratio kinode-stack/examples/lending
-python -m canon.cli serve  kinode-stack/examples/lending      # agent interface
+python -m canon.cli serve  kinode-stack/examples/lending
 ```
 
-Or install each package:
+or install them
 
 ```sh
 pip install -e canon -e intent -e loom -e verdict -e weft -e tract -e rune
 canon check kinode-stack/examples/lending
 ```
 
-## Documentation
+## docs
 
-| Document | Contents |
+| doc | what is in it |
 | --- | --- |
-| [docs/architecture.md](docs/architecture.md) | How the pieces fit, and why each one exists |
-| [docs/languages.md](docs/languages.md) | All seven languages with worked examples |
-| [docs/business-case.md](docs/business-case.md) | Who buys this, how it is priced, why it is defensible |
-| [docs/diagnostics.md](docs/diagnostics.md) | Every diagnostic code and what it means |
+| [architecture](docs/architecture.md) | how the pieces fit and why each one is there |
+| [languages](docs/languages.md) | all seven with worked examples |
+| [business case](docs/business-case.md) | who buys it, pricing, what has to hold |
+| [diagnostics](docs/diagnostics.md) | every code and what it means |
 
-## Repository layout
+## layout
 
-Each language is its own repository, versioned independently under SemVer,
-with its own changelog and tests.
+each language is its own repo, versioned on its own under semver, with its own
+changelog and tests
 
 ```
 kinode/
-  canon/          core language, runtime, verifier, Atlas, CLI, agent interface
-  intent/         specification layer
+  canon/          core language, runtime, verifier, atlas, cli, agent interface
+  intent/         spec layer
   loom/           durable workflows
   verdict/        decision rules
   weft/           schemas and migrations
   tract/          infrastructure
-  rune/           governance policy
-  kinode-stack/   documentation, cross-language examples, integration tests
+  rune/           policy
+  kinode-stack/   docs, cross language examples, integration tests
 ```
 
-## Licence
+## licence
 
-Apache-2.0. Copyright Kinode.
+Apache-2.0, Kinode.

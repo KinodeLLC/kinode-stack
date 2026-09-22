@@ -1,17 +1,18 @@
 # Diagnostics
 
-Every diagnostic is a structured object carrying a stable code, a
-severity, a source span, machine-readable facts and, where one exists,
-a concrete repair. Rendered text is generated from that structure.
+every diagnostic is a structured object with a stable code, a severity, a
+source span, machine readable facts, and a concrete fix where there is one.
+the text you read gets generated off that structure, nothing downstream
+parses the rendered output.
 
-Codes are a public API. New codes can be added; the meaning of an
-existing code does not change.
+codes are public api. new ones get added, existing ones do not change what
+they mean.
 
-## Errors
+## errors
 
-### Lexing
+### lexing
 
-| Code | Meaning |
+| code | means |
 | --- | --- |
 | `CANON-E0001` | unexpected character |
 | `CANON-E0002` | unterminated text literal |
@@ -19,9 +20,9 @@ existing code does not change.
 | `CANON-E0004` | unterminated block comment |
 | `CANON-E0005` | tab character in source (canonical form uses spaces) |
 
-### Parsing
+### parsing
 
-| Code | Meaning |
+| code | means |
 | --- | --- |
 | `CANON-E0101` | unexpected token |
 | `CANON-E0102` | expected a declaration |
@@ -32,9 +33,9 @@ existing code does not change.
 | `CANON-E0107` | missing module header |
 | `CANON-E0108` | expected a pattern |
 
-### Naming and resolution
+### naming
 
-| Code | Meaning |
+| code | means |
 | --- | --- |
 | `CANON-E0201` | unknown name |
 | `CANON-E0202` | unknown type |
@@ -46,9 +47,9 @@ existing code does not change.
 | `CANON-E0208` | unknown module |
 | `CANON-E0209` | cyclic definition |
 
-### Types
+### types
 
-| Code | Meaning |
+| code | means |
 | --- | --- |
 | `CANON-E0301` | type mismatch |
 | `CANON-E0302` | wrong number of arguments |
@@ -63,9 +64,9 @@ existing code does not change.
 | `CANON-E0311` | recursive definition without a decreases clause |
 | `CANON-E0312` | type argument mismatch |
 
-### Effects and capabilities
+### effects
 
-| Code | Meaning |
+| code | means |
 | --- | --- |
 | `CANON-E0401` | undeclared effect |
 | `CANON-E0402` | declared effect is never used |
@@ -74,9 +75,9 @@ existing code does not change.
 | `CANON-E0405` | capability escalation across call boundary |
 | `CANON-E0406` | effect operation outside its declared effect |
 
-### Contracts
+### contracts
 
-| Code | Meaning |
+| code | means |
 | --- | --- |
 | `CANON-E0501` | precondition not satisfiable |
 | `CANON-E0502` | postcondition violated by counterexample |
@@ -87,9 +88,9 @@ existing code does not change.
 | `CANON-E0507` | precondition violated at runtime |
 | `CANON-E0508` | postcondition violated at runtime |
 
-### Totality and cost
+### totality and cost
 
-| Code | Meaning |
+| code | means |
 | --- | --- |
 | `CANON-E0601` | step budget exceeded |
 | `CANON-E0602` | io budget exceeded |
@@ -97,9 +98,9 @@ existing code does not change.
 | `CANON-E0604` | unbounded recursion detected |
 | `CANON-E0605` | decreases clause does not decrease |
 
-### Runtime
+### runtime
 
-| Code | Meaning |
+| code | means |
 | --- | --- |
 | `CANON-E0701` | division by zero |
 | `CANON-E0702` | index out of bounds |
@@ -108,9 +109,9 @@ existing code does not change.
 | `CANON-E0705` | pattern match failure |
 | `CANON-E0706` | explicit abort |
 
-### Journal and replay
+### journal and replay
 
-| Code | Meaning |
+| code | means |
 | --- | --- |
 | `CANON-E0801` | journal divergence: operation mismatch |
 | `CANON-E0802` | journal divergence: argument mismatch |
@@ -118,9 +119,9 @@ existing code does not change.
 | `CANON-E0804` | nondeterminism detected |
 | `CANON-E0805` | journal integrity: hash chain broken |
 
-### Governance
+### governance
 
-| Code | Meaning |
+| code | means |
 | --- | --- |
 | `CANON-E0901` | definition hash not found |
 | `CANON-E0902` | edit transaction conflict |
@@ -128,9 +129,9 @@ existing code does not change.
 | `CANON-E0904` | behavioral regression detected in shadow |
 | `CANON-E0905` | blast radius exceeds authorization |
 
-## Warnings
+## warnings
 
-| Code | Meaning |
+| code | means |
 | --- | --- |
 | `CANON-W0001` | unused binding |
 | `CANON-W0002` | unused parameter |
@@ -141,11 +142,11 @@ existing code does not change.
 | `CANON-W0007` | non-canonical formatting |
 | `CANON-W0008` | law is untested (no generator for parameter type) |
 
-## Laws
+## laws
 
-Named properties the verifier checks against generated inputs.
+named properties the verifier checks against generated inputs.
 
-| Law | Arguments | Meaning |
+| law | args | means |
 | --- | --- | --- |
 | `associative` | 0 | f(f(a, b), c) == f(a, f(b, c)). |
 | `bounded_output` | 1 | The result's size never exceeds the given bound. |
@@ -163,26 +164,25 @@ Named properties the verifier checks against generated inputs.
 | `pure` | 0 | Performs no effects. |
 | `total` | 0 | Defined for every input satisfying the preconditions. |
 
-## Retry reasons
+## retry reasons
 
-Accepted after `retries N on ...` in an `ask` expression.
+what you can put after `retries N on ...` in an `ask`.
 
-| Reason | Fires when |
+| reason | fires when |
 | --- | --- |
-| `type_error` | The response did not inhabit the declared type |
-| `contract_violation` | The result failed an `ensures` clause |
-| `grounding_failure` | The output was not supported by the grounding sources |
-| `judge_rejected` | A `judge` clause rejected the result |
-| `refusal` | The model declined the request |
-| `timeout` | The call did not complete in time |
+| `type_error` | the response did not fit the declared type |
+| `contract_violation` | the result failed an `ensures` clause |
+| `grounding_failure` | the output was not backed by the grounding sources |
+| `judge_rejected` | a `judge` clause turned it down |
+| `refusal` | the model declined |
+| `timeout` | it did not come back in time |
 
-## Data classifications
+## classifications
 
-Ordered least to most sensitive. A capability grant may cap the
-classification an actor can reach, and a Weft migration may not
-weaken one.
+least to most sensitive. a grant can cap what an actor reaches and a weft
+migration cannot weaken one.
 
-| Rank | Classification |
+| rank | classification |
 | --- | --- |
 | 0 | `public` |
 | 1 | `internal` |

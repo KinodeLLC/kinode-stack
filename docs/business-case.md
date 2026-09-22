@@ -1,180 +1,170 @@
 # Business case
 
-## The bet
+## the bet
 
-Software authorship is shifting from people to agents. The constraint on that
-shift is not model capability — it is that nobody will give an agent write
-access to production while the damage it can do is unbounded and unauditable.
+writing software is moving from people to agents. what is holding that up is
+not model capability, it is that nobody hands an agent write access to
+production while the damage it can do is unbounded and nobody can audit it
+afterwards
 
-Every team that has tried running agents against real systems hits the same
-wall, in the same order:
+every team that points agents at a real system hits the same wall in the same
+order. the agent writes something plausible that passes review and then fails
+in a way nobody thought about, so the team adds review gates and loses most of
+the speed, so the team pushes the agent onto low stakes work and loses most of
+the value
 
-1. The agent writes plausible code that passes review and fails in a way nobody
-   anticipated.
-2. The team adds review gates, which removes most of the speed advantage.
-3. The team restricts the agent to low-stakes work, which removes most of the
-   value.
+the gap is not a better model. there is no mechanism to establish what an agent
+written change can reach, whether it still does what somebody asked for, and
+who authorised it, without a person reading the code
 
-The gap is not a better model. It is that there is no mechanism to establish
-what an agent-authored change can reach, whether it still does what was asked,
-and who authorised it — without a person reading the code.
+## what it does
 
-## What this is
+three questions with mechanical answers
 
-A substrate where those three questions have mechanical answers:
+what can it reach. the capability footprint of a call graph gets computed off
+the code, not declared, and blast radius is a graph query
 
-- **What can it reach?** The capability footprint of any call graph is computed
-  from the code, not declared. Blast radius is a graph query.
-- **Does it still do what was asked?** Specifications are executable and pinned
-  to content hashes, so drift is detected by hash comparison rather than by
-  someone noticing.
-- **Who authorised it?** Every grant, denial, verification and promotion is in
-  a hash-chained audit log, keyed to the exact version of the code.
+does it still do what was asked. specs are runnable and pinned to content
+hashes, so drift gets found by comparing hashes instead of by somebody noticing
 
-The languages are how you get those properties. They are not the product.
+who authorised it. every grant, denial, verification and promotion is in a hash
+chained audit log keyed to the exact version of the code
 
-## Commercial architecture
+the languages are how you get those properties. they are not the product
 
-### Languages do not make money. Control planes do.
+## licensing
 
-Rust, Python, Go, TypeScript — enormously valuable, none of them a business.
-What monetises is the runtime and the control plane around it: Databricks,
-Snowflake, Temporal, HashiCorp, Vercel.
+rust, python, go and typescript are all enormously valuable and none of them
+are a business. what makes money is the runtime and the control plane around
+it, databricks and snowflake and temporal and hashicorp and vercel
 
-So:
+so the languages are open, apache-2.0. they are the wedge, they exist to make
+the control plane the only sensible place to run
 
-- **The languages are open and permissively licensed.** Apache-2.0. They are
-  the wedge, not the product. They exist to make the control plane the only
-  sensible place to run.
-- **The control plane is the product**: the verifier, the capability broker,
-  the effect journal, shadow deployment and the audit ledger. Nothing
-  agent-authored reaches production without passing through it.
+the control plane is the product, the verifier, the capability broker, the
+effect journal, shadow deployment and the audit ledger, and nothing agent
+written reaches production without going through it
 
-Everything in this repository is the open half. The control plane is the hosted
-half: multi-tenant policy administration, cross-service blast radius, journal
-retention and search, promotion workflow, and the compliance reporting that
-falls out of the audit chain.
+everything in this repo is the open half. the hosted half is multi tenant
+policy administration, blast radius across services, journal retention and
+search, promotion workflow, and the compliance reporting that falls out of the
+audit chain on its own
 
-### Pricing scales with agents, not seats
+## pricing
 
-Every existing developer tool is priced per human seat, which means every one
-of them is structurally damaged by the transition this is built for. Fewer
-engineers, fewer seats, shrinking revenue.
+every developer tool that exists is priced per human seat, so every one of them
+gets structurally damaged by the thing this is built for. fewer engineers,
+fewer seats, less revenue
 
-This is priced **per agent-action**: per verification, per capability grant,
-per shadow replay, per promotion. Revenue grows precisely as humans leave the
-loop.
+this is priced per agent action, per verification, per grant, per shadow
+replay, per promotion. revenue goes up as humans come out of the loop
 
-That is the commercially important property, more than any technical one. It is
-the only dev-tools pricing model that improves as the transition proceeds.
+that is the part that matters commercially, more than anything technical here.
+it is the only pricing model for a developer tool that gets better as the
+transition goes on
 
-| Tier | Unit | Buyer |
+| tier | unit | who buys it |
 | --- | --- | --- |
-| Open | free | any team; drives adoption and standard-setting |
-| Control plane | per verification / grant / promotion | platform engineering |
-| Compliance | per audited environment, annual | risk, audit, regulatory affairs |
-| Corpus | licensed | AI providers and research labs |
+| open | free | anybody, drives adoption |
+| control plane | per verification, grant, promotion | platform engineering |
+| compliance | per audited environment, annual | risk, audit, regulatory |
+| corpus | licensed | ai providers and labs |
 
-## Who buys it
+## buyers
 
-### The defensible claim
+the claim is not that every business needs a new language, that has never been
+true of anything. it is that every business letting agents touch production
+will need capability scoping, provable blast radius and replayable audit, the
+way every business that touched the internet needed a firewall
 
-Not "every business needs a new language" — that has never been true of
-anything. The claim is:
+that is a category and nobody owns it yet. the languages are how you get
+position inside it, because when capabilities and contracts are structural the
+enforcement is sound instead of best effort, and everybody else is pattern
+matching on agent output and calling it a guardrail
 
-> Every business that lets agents touch production will need capability
-> scoping, provable blast radius and replayable audit — the way every business
-> that touched the internet needed a firewall.
+in order of how fast they pay
 
-That is a category, and it is currently unowned. The languages are how you get
-privileged position inside it: when capabilities and contracts are
-*structural*, enforcement is sound rather than best-effort. Everyone else is
-pattern-matching on agent output and calling it a guardrail.
+regulated decision logic. underwriting, pricing, claims, eligibility, trading
+limits. smallest surface, biggest budgets, shortest sales cycle. these teams
+already have to explain decisions and prove they did not use protected
+attributes, and verdict makes both structural, a decision that cannot explain
+itself does not compile and a prohibited factor is unreachable rather than
+unused. that is a stronger control than any process they have now and it is
+auditable
 
-### Entry points, in order of willingness to pay
+service plumbing. biggest surface and where agents already do most of the work.
+slower to monetise but it is the route to being infrastructure instead of a
+compliance tool
 
-**Regulated decision logic.** Underwriting, pricing, claims, eligibility,
-trading limits. Smallest surface, highest budgets, shortest sales cycle. These
-teams are already legally required to explain decisions and prove protected
-attributes were not used. Verdict makes both structural: a decision that cannot
-explain itself does not compile, and a prohibited factor is unreachable rather
-than merely unused. That is a materially stronger control than any existing
-process, and it is auditable.
+infrastructure and config. where agents do the most damage. sharp pain, narrow
+product
 
-**Service plumbing.** The largest surface and where agents already do the most
-work. Slower to monetise, but it is the path to being infrastructure rather
-than a compliance tool.
+data pipelines. good technical fit, weft's derived migrations and lineage are
+genuinely better than what is there now, but a crowded market
 
-**Infrastructure and configuration.** Where agents cause the most catastrophic
-damage. Sharp pain, narrow product.
+## adoption
 
-**Data pipelines.** Good technical fit — Weft's derived migrations and lineage
-are genuinely better than the status quo — but a crowded market.
+nobody rewrites 40 million lines. it goes in incrementally, a new service or
+one decision inside an existing one written in the family and run through the
+control plane while everything around it stays where it is. the value shows up
+straight away because what is being bought is the governance, and governance is
+per change, not per codebase
 
-### Adoption path
+## ai providers
 
-Nobody rewrites 40 million lines. Adoption is incremental: a new service, or
-one decision inside an existing one, written in the family and run through the
-control plane while everything around it stays as it is. The value shows up
-immediately because the *governance* is what is being bought, and governance
-is per-change, not per-codebase.
+running this normally produces, as exhaust, verified tuples of what was asked
+for, what got written, the proof it holds, and what happened in the real world
 
-## Why AI providers specifically
+that is the scarcest thing in ai right now. coding agent capability is
+bottlenecked on verified reward signal and this produces it continuously off
+real production work instead of off synthetic benchmarks. the deterministic
+replayable runtime is also a reinforcement learning environment for coding
+agents, real tasks and real environments with exact replay and success criteria
+a machine can check
 
-The stack emits, as ordinary exhaust from normal operation:
+so the pitch to a provider is not use our language. it is that this is the
+verified work substrate and the data flywheel runs through it, which is either
+a large licensing relationship or the reason an acquisition happens at a number
+nobody got to by discounted cash flow
 
-> verified `(intent → implementation → proof → real-world outcome)` tuples
+## risks
 
-That is the scarcest asset in AI right now. Coding-agent capability is
-bottlenecked on verified reward signal, and this produces it continuously from
-real production work rather than from synthetic benchmarks. The deterministic,
-replayable runtime is also a reinforcement-learning environment for coding
-agents: real tasks, real environments, exact replay, machine-checkable success
-criteria.
+agents have to keep getting more autonomous. if the industry settles on a human
+in the loop for everything then governance is nice to have rather than
+required. the trajectory says otherwise but this is the assumption everything
+sits on
 
-The pitch to a provider is therefore not "use our language". It is: *this is
-the verified-work substrate, and the data flywheel runs through it.* That is
-either a large licensing relationship or the reason an acquisition happens at a
-number that is not arrived at by discounted cash flow.
+enterprises have to adopt a new language for new work. hardest part of it. what
+makes it survivable is that the surface languages are narrow and shaped like
+their domain, a risk team picking up verdict for one decision is a much smaller
+ask than a platform team picking up a general purpose language, plus
+compilation to wasm and ffi into what they already run
 
-## What has to be true
+the control plane has to stay ahead of the open core. normal open core risk. the
+moat is not the code, it is the accumulated journal and audit history and the
+cross service graph, and none of that is portable
 
-Honest list of what this depends on.
+somebody with more distribution could ship the category first, most likely a
+model provider or a big cloud shipping agent governance as a platform feature.
+the defence is structural, guardrails bolted onto an unconstrained language are
+approximate and approximate is not good enough for the buyers with the money
 
-**Agents keep getting more autonomous.** If the industry settles on
-human-in-the-loop for everything, the governance layer is a nice-to-have rather
-than a requirement. Current trajectory says otherwise, but it is the load-bearing
-assumption.
+## status
 
-**Enterprises adopt a new language for new work.** The hardest sell. Mitigated
-by the surface languages being narrow and domain-shaped — a risk team adopting
-Verdict for one decision is a much smaller ask than a platform team adopting a
-general-purpose language — and by compilation to WASM with FFI into existing
-runtimes.
+0.1.0. seven languages, a checker, verifier, deterministic runtime, capability
+broker, hash chained journal and audit, shadow deployment, promotion gate,
+semantic codebase graph, cli and agent interface. fourteen suites all passing,
+around 14,000 lines, no dependencies
 
-**The control plane stays ahead of the open core.** Standard open-core risk. The
-moat is not the code; it is the accumulated journal, the audit history and the
-cross-service graph, none of which is portable.
+what would change the commercial picture, in order
 
-**Nobody with more distribution ships the same category first.** The most
-likely competitive shape is a model provider or a major cloud shipping agent
-governance as a platform feature. The defence is the structural one: guardrails
-bolted onto an unconstrained language are approximate, and approximate is not
-good enough for the buyers with the budgets.
+a hosted control plane, the thing that actually gets sold
 
-## Status and cost to date
+wasm compilation and ffi so a canon module runs inside an existing service
+instead of beside it
 
-Version 0.1.0. Seven languages, a checker, verifier, deterministic runtime,
-capability broker, hash-chained journal and audit, shadow deployment, promotion
-gate, semantic codebase graph, CLI and agent interface. Fourteen test suites,
-all passing. Roughly 14,000 lines, no dependencies.
+a second implementation of the language, which proves the hashes are a spec and
+not an implementation detail
 
-The next milestones that change the commercial picture, in order:
-
-1. **A hosted control plane** — the thing that is actually sold.
-2. **WASM compilation and FFI**, so a Canon module runs inside an existing
-   service rather than beside it.
-3. **A second language implementation**, proving the hashes are a specification
-   rather than an implementation detail.
-4. **A reference deployment in a regulated environment**, which is the only
-   evidence that matters to the buyers who pay most.
+a reference deployment somewhere regulated, which is the only evidence that
+moves the buyers who pay the most

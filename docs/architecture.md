@@ -1,28 +1,17 @@
 # Architecture
 
-How the pieces fit together, and why each one is shaped the way it is.
+how the pieces fit and why each one is shaped the way it is.
 
-## The premise
+the thing everything comes out of: when an agent writes the code and nobody
+reads it, something else has to establish that it is correct, that it cannot
+reach further than it was allowed to, and that it still does what somebody
+asked for. several of the decisions below cost ergonomics that a language for
+humans would not give up, and that is why.
 
-The usual framing of AI-native programming is "a language a model can write
-easily". That framing is wrong, because models already write Python and
-TypeScript fluently. Syntax was never the bottleneck.
-
-The actual bottleneck is on the other side. When an agent writes the
-implementation and no human reads it, something else has to establish that the
-code is correct, that it cannot reach further than it was allowed to, and that
-it still does what was asked. The design target is therefore:
-
-> correctness, blast radius and intent-conformance established **without a
-> human reading the implementation**.
-
-Every decision below follows from that, and several of them cost ergonomics
-that a human-authored language would not give up.
-
-## Layers
+## layers
 
 ```
-Intent          specifications: executable scenarios, hash-pinned traces
+Intent          specs, runnable scenarios, traces pinned to hashes
    │
    ├── Verdict  decisions ──┐
    ├── Loom     workflows ──┤
@@ -34,114 +23,108 @@ Intent          specifications: executable scenarios, hash-pinned traces
                                     │
                           verifier ─ generation, shrinking, laws
                                     │
-                          Ledger ─── journal, capabilities, audit
+                          journal ── effects, capabilities, audit
                                     │
-                          Atlas ──── graph, projections, transactions
+                          atlas ──── graph, projections, transactions
                                     │
                           gate ───── promote / escalate / block
 ```
 
-Six surface languages lower to one IR. That is the single most important
-structural decision here: it means the type system, the verifier, the effect
-analysis, the journal, the audit chain and the promotion gate are written once
-and apply to all of them. A Verdict decision, a Loom workflow and a Canon
-function sit in the same dependency graph and are diffed by the same machinery.
+six surface languages lower to one ir, which is the decision everything else
+hangs off. the type system, the verifier, the effect analysis, the journal, the
+audit chain and the gate get written once and work on all of them, and a
+verdict decision and a loom workflow and a canon function all end up in the
+same dependency graph getting diffed by the same code. the cost is that each
+language can only say what the core ir can hold, which has been worth paying
+every time it came up.
 
-The cost is that each surface language is constrained by what the core IR can
-express. That has been worth paying every time it came up.
+## syntax
 
-## Canon: the core
+one way to write each thing. no user defined operators, no macros, no
+formatting choices. the printer output is a function of the ast so two people
+writing the same meaning produce the same bytes
 
-### Low syntactic entropy
+that is not a style preference, it is what makes a text diff a semantic diff
+and what makes content addressing worth anything
 
-One canonical way to write each thing. No user-defined operators, no macros,
-no formatting choices. The printer's output is a function of the AST, so two
-authors producing the same meaning produce identical bytes.
+tabs are an error, one indentation character. one comment syntax `--` and one
+doc syntax `---`, and ordinary comments do not survive into canonical form, so
+anything you want kept goes in a `doc` or `intent` clause where it becomes part
+of the hash. there is no binary floating point, `Int` is arbitrary precision
+and `Dec` is exact decimal, since the workloads this is for are money and
+regulation and cannot take representation error
 
-This is not a style preference. It is what makes a textual diff a semantic
-diff, and what makes content addressing useful rather than noisy.
+the reserved word list is short. anything that only means something inside one
+block, `system` inside an `ask`, `step` inside a workflow, `factor` inside a
+decision, is contextual, because a language where most of the code is generated
+should not be taking identifiers away from you
 
-Supporting decisions:
+## hashing
 
-- **Tabs are an error.** One indentation character.
-- **One comment syntax** (`--`), one doc syntax (`---`). Ordinary comments do
-  not survive into canonical form; documentation that matters goes in `doc` or
-  `intent` clauses, which are part of the hashed definition.
-- **No binary floating point.** `Int` is arbitrary precision, `Dec` is exact
-  decimal. The target workloads are monetary and regulatory and cannot tolerate
-  representation error.
-- **A small reserved word set.** Everything that only has meaning inside a
-  particular block — `system` inside an `ask`, `step` inside a workflow,
-  `factor` inside a decision — is a contextual keyword. A language whose code
-  is mostly generated should not litter the identifier space.
+two hashes per definition
 
-### Content addressing
-
-Every definition has two hashes:
-
-| Hash | Covers | Changes when |
+| hash | covers | moves when |
 | --- | --- | --- |
-| local | the body, dependencies referenced by name | this definition is edited |
-| deep | the body, dependencies referenced by *their* deep hashes | this definition or anything under it is edited |
+| local | the body, dependencies by name | you edit this definition |
+| deep | the body, dependencies by their deep hashes | you edit this or anything under it |
 
-The deep hash is the definition's identity. Verification results, cached
-evaluations, journal entries and audit records are keyed by it, so a result can
-never be attributed to the wrong version of the code.
+the deep hash is the identity. verification results, cached evaluations,
+journal entries and audit records all key off it so a result cannot get
+attributed to the wrong version of the code
 
-The encoding is invariant under things that do not change meaning:
+the encoding ignores things that do not change meaning. local variables get
+encoded by binding depth instead of by name, so renaming a parameter or a `let`
+invalidates nothing and needs no reverification. independent clause sets get
+sorted so two people writing the same contracts in a different order land on
+the same hash. commutative operators get sorted by encoded operand so `a + b`
+and `b + a` come out the same. operator synonyms collapse, `&&` and `and` are
+one form
 
-- **Local variables are encoded by binding depth**, not name. Renaming a
-  parameter or a `let` is a zero-risk edit: nothing downstream is invalidated
-  and no re-verification is needed.
-- **Independent clause sets are sorted.** Two agents writing the same contracts
-  in different order get the same hash.
-- **Commutative operators are sorted by encoded operand**, so `a + b` and
-  `b + a` share a hash.
-- **Operator synonyms collapse.** `&&` and `and` are one form.
+what it does not ignore matters as much. enum variant order stays because it
+usually encodes a severity ladder or a state progression. match arm order stays
+because first match wins is semantic. a field default is hashed because it
+decides what a literal that leaves the field out produces. `intent` is hashed,
+so changing what a function is for forces reverification and a new audit record
+even when you did not touch the body
 
-What is *not* invariant is as considered as what is. Enum variant order is
-preserved, because it often encodes a severity ladder or a state progression.
-Match arm order is preserved, because first-match-wins is semantic. A field's
-default is hashed, because it decides what a literal that omits the field
-produces. `intent` is hashed, because a change in stated purpose should force
-re-verification and a new audit record even when the body is untouched.
+mutually recursive definitions get hashed as a group so mutual recursion is not
+a special case anywhere else
 
-Mutually recursive definitions are hashed as a group, so mutual recursion is
-not a special case anywhere else in the system.
+## effects
 
-### Effects as capabilities
+a function declares every effect operation it performs, and anything calling it
+declares them too
 
-A function declares every effect operation it performs. Calling a function that
-performs an effect requires the caller to declare it too.
+the checker will not infer them. an inferred list gets wider every time
+somebody edits a body, which is exactly the event this exists to surface. the
+cost is real, adding an effect deep in a call graph means updating every caller
+above it, but the error names each one and hands you the fix, and the
+alternative is privilege creep nobody sees
 
-The checker deliberately does **not** infer effects. An inferred footprint
-widens silently when a body changes, which is exactly the event the system
-exists to surface. The cost is real — adding an effect deep in a call graph
-requires updating every caller — but the diagnostic names each caller and
-supplies the repair, and the alternative is privilege escalation nobody sees.
+`uses db.*` is legal and warns, because a wildcard turns the footprint into an
+over approximation and widens every blast radius computed off it
 
-`uses db.*` is legal and warns, because a wildcard makes the footprint an
-over-approximation, which widens every blast radius computed against it.
+## totality
 
-### Totality
+no `/` or `%` operator, dividing by zero is the only arithmetic that can fail.
+`Int.div` gives you an `Option` and the checker rejects `/` with a targeted fix
+rather than a parse error
 
-- **No `/` or `%` operator.** Division is the one partial arithmetic operation.
-  `Int.div` returns `Option`. The checker rejects `/` with a targeted repair
-  rather than a parse error.
-- **Recursion requires `decreases`.** The measure is evaluated on entry and
-  compared against the enclosing call's; a measure that fails to decrease is a
-  fault naming both values.
-- **Matches must be exhaustive.** There is no runtime match failure.
-- **Every evaluation runs under a budget** — steps, io, tokens, wall time,
-  spend. A program that exceeds its declared cost stops with a structured
-  fault.
+recursion needs a `decreases` measure, evaluated on entry and compared against
+the enclosing call, and a measure that does not decrease is a fault with both
+values in it
 
-Together these mean unreviewed, agent-authored code can be executed safely,
-which is a precondition for everything the verifier and the shadow runner do.
+matches have to be exhaustive, there is no runtime match failure
 
-### Errors designed as a repair signal
+everything runs under a budget for steps, io, tokens, wall time and money, and
+a program that goes past its declared cost stops with a structured fault
 
-A diagnostic is a structured object, not a formatted string:
+together that is what lets you execute agent written code nobody has reviewed,
+which the verifier and the shadow runner both need to be able to do
+
+## errors
+
+a diagnostic is a structured object, not a string
 
 ```json
 {
@@ -153,169 +136,165 @@ A diagnostic is a structured object, not a formatted string:
 }
 ```
 
-Rendered text is generated from this, never the reverse. Codes are a stable
-public API: new ones can be added, but an existing code's meaning does not
-change.
+the rendered text gets generated from that, never the other way round. codes
+are public api, you can add new ones but an existing one does not change what
+it means
 
-## The native model primitive
+## models
 
-`ask` is an expression form rather than a library call. That placement is what
-makes the following possible:
+`ask` is an expression rather than a library call, and that is what makes the
+rest of it possible
 
-**Schema-constrained output.** A JSON Schema is derived from the declared Canon
-type. Every object is closed with `additionalProperties: false` and every field
-required — a loose schema is how a malformed value reaches a contract check
-that was never designed to catch it.
+the json schema comes off the declared canon type, every object closed with
+`additionalProperties: false` and every field required, because a loose schema
+is how a malformed value gets past a contract check that was never written to
+catch it
 
-**Contract-checked output.** When an `ask` is in tail position — when its value
-*is* the function's result — the enclosing `ensures` clauses become obligations
-on the model's answer. A violation is retried with the failure fed back as
-repair context. Obligations are attached *only* in tail position; anywhere else
-they would check a clause against a value it was never written about.
+when an `ask` is in tail position, when its value is the function's result, the
+`ensures` clauses become obligations on what the model returned, and a failure
+gets retried with the failure handed back as context. obligations only attach
+in tail position, anywhere else they would be checking a clause against a value
+it was never written about
 
-**Strict coercion.** A model returning `"42"` where an `Int` was required is a
-contract violation to be retried, not something to quietly convert.
+coercion is strict. a model returning `"42"` where an `Int` was wanted is a
+contract violation to retry, not something to quietly convert
 
-**Capability scope and budget.** `model.infer` must be granted. Calls are
-charged against token and money budgets and journaled, so a run replays exactly
-and a cost is attributable to a definition.
+`model.infer` needs a grant, calls get charged against token and money budgets
+and written to the journal, so a run replays exactly and a cost can be pinned
+to a definition
 
-**Compile-time capability checking.** Current Claude models reject
-`temperature` with a 400 rather than ignoring it, so a `temperature` clause
-aimed at one of them is a compile error. Silently dropping the clause would be
-worse: the author asked for behaviour the model cannot provide.
+model capabilities get checked at compile time. current claude models reject
+`temperature` with a 400 instead of ignoring it, so a `temperature` clause
+aimed at one of them is a compile error, since dropping it silently would mean
+somebody asked for behaviour they are not going to get
 
-**Providers are pluggable.** `DeterministicProvider` produces schema-valid
-values as a pure function of its inputs — not a mock, a real provider whose
-outputs are reproducible. It is grounding-aware: when an `ask` declares
-`grounded_in`, generated strings are drawn from the source vocabulary, so a
-grounded function is testable without a network.
+providers plug in. `DeterministicProvider` produces schema valid values as a
+pure function of its inputs, so it is not a mock, it is a real provider you can
+reproduce. it knows about grounding too, so when an `ask` declares
+`grounded_in` the generated strings come out of the source vocabulary and a
+grounded function stays testable with no network
 
-## The Ledger
+## journal
 
-Three separate things, kept separate on purpose.
+three things, kept apart on purpose
 
-**Journal** — every effect performed, in order, with arguments and result,
-hash-chained. Altering a recorded argument breaks the chain at a specific
-sequence number, so the journal is usable as evidence rather than as a log.
+the journal holds every effect performed, in order, with arguments and result,
+hash chained. change a recorded argument and the chain breaks at a specific
+sequence number, which is what makes it usable as evidence rather than as a log
 
-**Broker** — decides whether an effect may be performed at all. Denies by
-default. A grant names operations, an actor, an expiry, a call ceiling and a
-maximum data classification. Every decision, allow or deny, is audited: an
-agent repeatedly attempting an operation it was never granted is exactly the
-signal an operator wants surfaced.
+the broker decides whether an effect happens at all and denies by default. a
+grant names operations, an actor, an expiry, a call ceiling and a maximum data
+classification. every decision gets audited either way, because an agent
+repeatedly trying something it was never granted is exactly what an operator
+wants to see
 
-**Audit** — an append-only hash-chained record of governance events. Distinct
-from the journal because it answers a different question: not "what did the
-program do" but "who authorised it, and on what basis". Nothing is ever
-rewritten; a correction is a new record referring to the earlier one.
+the audit chain is append only and hash chained and holds governance events. it
+answers a different question from the journal, not what the program did but who
+authorised it and on what basis. nothing gets rewritten, a correction is a new
+record pointing at the old one
 
-### Three execution modes
+## modes
 
-| Mode | Effects | Used for |
+| mode | effects | what it is for |
 | --- | --- | --- |
 | live | performed against handlers, recorded | production |
-| replay | answered from the recording, asserted to match | resumption, reproduction |
+| replay | answered from the recording, asserted to match | resumption, reproducing a bug |
 | shadow | answered from the recording, divergences collected | evaluating a change |
 
-Shadow mode is the mechanism that lets a change be evaluated against real
-production traffic without being able to touch anything. It is also, with no
-additional machinery, how Loom resumes a crashed workflow — completed steps
-return their recorded results without being performed again.
+shadow is what lets a change get evaluated against real production traffic
+without being able to touch anything, and with no extra machinery it is also
+how loom resumes a crashed workflow, since completed steps hand back what they
+recorded
 
-## Verification
+## verification
 
-For each function the verifier generates inputs from the parameter types,
-discards those violating preconditions, runs under a budget with effects going
-to a recording runtime, checks postconditions and laws, and shrinks failures.
+for each function it generates inputs off the parameter types, throws away the
+ones that break preconditions, runs the rest under a budget with effects going
+to a recording runtime, checks postconditions and laws, and shrinks failures
 
-Details that matter:
+generation is seeded so a failure reproduces off the seed alone on another
+machine months later, and the seed goes in the report
 
-- **Generation is seeded and deterministic.** A failure reproduces from the
-  seed alone, on another machine, months later. The seed is part of the report.
-- **Generation is biased toward boundaries** — zero, one, negative one,
-  integer limits, empty strings, Unicode, path traversal strings. Most contract
-  failures live at edges.
-- **Record invariants are respected.** Generating a value that violates an
-  invariant is not a useful test input, because it could never exist in a
-  running program.
-- **Effects are satisfied, never performed.** Verification must be safe to run
-  against unreviewed code.
-- **Shrinking is bounded.** A counterexample of `(0, 1)` is actionable and one
-  of `(-8213, 91, 4471)` is not, but a verifier that spends minutes minimising
-  is worse than one that reports a slightly larger case immediately.
+it biases toward boundaries, zero and one and negative one and integer limits
+and empty strings and unicode and path traversal strings, because that is where
+contract failures live
 
-Laws are named properties checked against generated inputs: `deterministic`,
+record invariants get respected, since generating a value that breaks one is
+not a useful test input when it could never exist in a running program
+
+effects get satisfied and never performed, verification has to be safe to point
+at code nobody reviewed
+
+shrinking is bounded. a counterexample of `(0, 1)` is something you can read and
+one of `(-8213, 91, 4471)` is not, but a verifier spending minutes minimising is
+worse than one handing you something slightly bigger right away
+
+laws are named properties checked against generated inputs. `deterministic`,
 `pure`, `idempotent_by`, `commutative`, `associative`, `monotonic_in`,
 `conserves`, `bounded_output`, `never_negative`, `order_independent`,
-`invertible_by`, `explains`.
+`invertible_by`, `explains`
 
-## Change evaluation
+## diffing
 
-Three layers, cheapest first.
+three layers, cheapest first
 
-**Structural diff** — which definitions changed by content hash, and the blast
-radius across the call graph. A graph walk over hashes, so it is free.
+structural diff is which definitions changed by hash and the blast radius
+across the call graph, a graph walk over hashes so it costs nothing
 
-**Differential execution** — both versions run on identical generated inputs
-with an effect runtime seeded from the arguments alone, so both see the same
-world. A difference in outcome is therefore a difference in the code.
+differential execution runs both versions on the same generated inputs with an
+effect runtime seeded off the arguments, so both see the same world and a
+difference in outcome is a difference in the code
 
-**Shadow replay** — the new version runs against a recorded journal.
+shadow replay runs the new version against a recorded journal
 
-### The promotion gate
+## gate
 
-The gate compares all of that against a stated authorisation and returns
-promote, escalate or block, with every finding naming the rule it came from.
+it takes all of that and an authorisation and returns promote, escalate or
+block, and every finding names the rule it came from
 
-Two subtleties that took getting wrong to find:
+two things here took getting wrong to find. capability deltas get computed per
+definition and then unioned, not as one set difference across everything
+touched, because unioning first lets a function that already had a capability
+hide another one newly getting it, which is the escalation the gate is for.
+and scope gets checked against definitions somebody actually edited, since a
+definition whose deep hash moved because a dependency changed was not edited by
+anyone, and counting that would make any authorisation narrower than the whole
+call graph unusable
 
-- **Capability deltas are computed per definition, then unioned** — not as one
-  set difference across all touched definitions. Unioning first lets a function
-  that already held a capability mask another newly gaining it, which is
-  exactly the privilege increase the gate exists to catch.
-- **Scope is checked against edited definitions only.** A definition whose deep
-  hash moved because a dependency changed was not edited by anyone, and
-  treating that as an out-of-scope modification would make any authorisation
-  narrower than the whole call graph unusable.
+## atlas
 
-## Atlas
+the agent's way into the codebase instead of files and grep
 
-The agent's interface to the codebase, replacing files and grep.
+queries are callers and callees direct or transitive, blast radius, transitive
+capability footprint attributed back to where each effect comes from, reachable
+data classifications, definitions with no contracts or no intent, and every
+definition that can reach a given effect
 
-**Queries**: callers and callees (direct or transitive), blast radius,
-transitive capability footprint attributed to its source, reachable data
-classifications, definitions lacking contracts or intent, every definition that
-can reach a given effect.
+projections get sized to a token budget and spend it by usefulness, focus
+definitions in full, what they call as contracts so you can call them correctly
+without reading them, what calls them as signatures so you know what a change
+touches. whatever does not fit gets reported as omitted rather than cut off
+quietly, since an agent that does not know its view is partial will reason like
+it is complete
 
-**Projections**: a view sized to a token budget, allocating by usefulness per
-token — focus definitions in full, their callees as *contracts* (enough to call
-them correctly without reading them), their callers as *signatures* (enough to
-know what a change would affect). What does not fit is reported as omitted
-rather than silently dropped; an agent that does not know its view is partial
-will reason as though it is complete.
+edits are transactional. a proposal gets parsed and checked and diffed without
+being applied, because the expensive part of an agent's mistake is usually not
+the mistake, it is the broken half state it leaves behind
 
-**Transactions**: a proposal is parsed, checked and diffed without being
-applied. The expensive part of an agent's mistake is usually not the mistake,
-it is the broken intermediate state left behind — here there is none.
+## limits
 
-## Implementation notes
+dependency free python 3.11+, around 14,000 lines. the anthropic sdk is an
+optional extra for live model calls
 
-Dependency-free Python 3.11+, about 14,000 lines. The Anthropic SDK is an
-optional extra needed only for live model calls.
+python was picked for reach, not speed. nothing in the design depends on it,
+the ir is a plain data structure, the canonical encoding is text, and the
+hashes are blake2b over that text, so a second implementation would produce
+the same hashes
 
-Python was chosen for reach rather than performance. Nothing in the design
-depends on it: the IR is a plain data structure, the canonical encoding is
-text, and the hashes are BLAKE2b over that text. A second implementation would
-produce identical hashes.
-
-Known limits at 0.1.0:
-
-- Generic functions are skipped by the verifier; they are checked at their call
-  sites.
-- The grounding check is syntactic — it catches invented identifiers and
-  quantities, which is the failure mode that matters for extraction, but it is
-  not entailment. A `judge` clause is the semantic route.
-- Retries in Loom are unrolled rather than looped, which bounds them at 8.
-- The interpreter is a tree walker. It is fast enough for verification and
-  shadow runs; it is not a production runtime.
+what is not there at 0.1.0. generic functions get skipped by the verifier and
+checked at their call sites instead. the grounding check is syntactic, it
+catches invented identifiers and quantities which is the failure that matters
+for extraction, but it is not entailment and a `judge` clause is the semantic
+route. loom retries are unrolled so they cap at 8. the interpreter is a tree
+walker, fast enough for verification and shadow runs and not a production
+runtime.
