@@ -9,7 +9,7 @@ cloud environment with no local copy of the code.
 
 ```
 i own kinode (github org KinodeLLC). i have a working language family and
-runtime for code that agents write instead of people. eight private repos,
+runtime for code that agents write instead of people. eight public repos,
 version 0.1.0, all tests passing. you are picking it up from here.
 
 ## get set up first
@@ -114,9 +114,6 @@ do not write any of these:
   instead of beside it
 - a second implementation of the language, which would prove the hashes are a
   spec and not an implementation detail
-- the repos are private. canon needs to go public at some point if it is going
-  to get adoption, and that is easier before anybody outside has a link they
-  cannot open
 
 known gaps at 0.1.0 are in docs/architecture.md under limits. generic
 functions get skipped by the verifier, the grounding check is syntactic rather
@@ -126,16 +123,3 @@ production runtime.
 
 tell me what you are going to do before you start on anything large.
 ```
-
----
-
-## one thing to sort out first
-
-the repos are private, so a cloud session needs access to the KinodeLLC org
-before any of this works. either
-
-- make them public, which canon needs eventually anyway, or
-- give the cloud environment a token with read access to the org
-
-if neither is done the session will fail at the clone step and everything
-after it is wasted.

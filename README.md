@@ -46,13 +46,13 @@ analysis covering all of them instead of seven of each
 
 | language | file | what it is for |
 | --- | --- | --- |
-| [intent](../intent) | `.intent` | specs whose scenarios run and whose traces are pinned to hashes |
-| [canon](../canon) | `.canon` | the core. contracts, effects as capabilities, content addressing |
-| [loom](../loom) | `.loom` | durable workflows, compensation, resumption off the journal |
-| [verdict](../verdict) | `.verdict` | regulated decisions that will not compile unless they explain themselves |
-| [weft](../weft) | `.weft` | schemas, migrations with the round trip proved, data lineage |
-| [tract](../tract) | `.tract` | infrastructure worked out from what the code can reach |
-| [rune](../rune) | `.rune` | policy, compiled into grants and promotion authorisations |
+| [intent](https://github.com/KinodeLLC/intent) | `.intent` | specs whose scenarios run and whose traces are pinned to hashes |
+| [canon](https://github.com/KinodeLLC/canon) | `.canon` | the core. contracts, effects as capabilities, content addressing |
+| [loom](https://github.com/KinodeLLC/loom) | `.loom` | durable workflows, compensation, resumption off the journal |
+| [verdict](https://github.com/KinodeLLC/verdict) | `.verdict` | regulated decisions that will not compile unless they explain themselves |
+| [weft](https://github.com/KinodeLLC/weft) | `.weft` | schemas, migrations with the round trip proved, data lineage |
+| [tract](https://github.com/KinodeLLC/tract) | `.tract` | infrastructure worked out from what the code can reach |
+| [rune](https://github.com/KinodeLLC/rune) | `.rune` | policy, compiled into grants and promotion authorisations |
 
 ## effects
 
