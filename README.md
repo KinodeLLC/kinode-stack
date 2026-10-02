@@ -294,6 +294,7 @@ canon check kinode-stack/examples/lending
 | [languages](docs/languages.md) | all seven with worked examples |
 | [business case](docs/business-case.md) | who buys it, pricing, what has to hold |
 | [diagnostics](docs/diagnostics.md) | every code and what it means |
+| [handoff](HANDOFF.md) | prompt for handing this to a new session |
 
 ## layout
 
